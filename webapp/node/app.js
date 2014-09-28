@@ -193,8 +193,10 @@ var helpers = {
   isUserLocked: function(user, callback) {
     if(!user) {
       return callback(false);
-    };
-
+    }
+    if (banUser[user.id] && (globalConfig.userLockThreshold <= banUser[user.id].failures)) {
+      return callback(true);
+    }
     mysqlPool.query(
       'SELECT * FROM ban_user WHERE ' +
       'user_id = ?',
