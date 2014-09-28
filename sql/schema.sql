@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS `login_log` (
 
 CREATE TABLE IF NOT EXISTS `ban_user` (
   `user_id` int NOT NULL PRIMARY KEY,
-  `failure_count` int NOT NULL
+  `failures` int NOT NULL
 ) DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS `ban_ip` (
   `ip` varchar(255) NOT NULL PRIMARY KEY,
-  `failure_count` int NOT NULL
+  `failures` int NOT NULL
 ) DEFAULT CHARSET=utf8;
