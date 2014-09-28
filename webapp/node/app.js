@@ -82,27 +82,21 @@ var helpers = {
         });
       },
       function(user, cb) {
-        async.parallel([
-          function(done) {
-            helpers.isIPBanned(ip, function(banned) {
-              if(banned) {
-                done('banned');
-              } else {
-                done(null);
-              };
-            });
-          },
-          function (done) {
-            helpers.isUserLocked(user, function(locked) {
-              if(locked) {
-                done('locked');
-              } else {
-                done(null);
-              };
-            });
-          }
-        ], function(err) {
-          cb(err, user);
+        helpers.isIPBanned(ip, function(banned) {
+          if(banned) {
+            cb('banned', user);
+          } else {
+            cb(null, user);
+          };
+        });
+      },
+      function(user, cb) {
+        helpers.isUserLocked(user, function(locked) {
+          if(locked) {
+            cb('locked', user);
+          } else {
+            cb(null, user);
+          };
         });
       },
       function(user, cb) {
