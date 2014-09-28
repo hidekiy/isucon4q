@@ -94,41 +94,59 @@ function applyBanIp(succeeded, ip, done) {
   }
 }
 
-function loadLoginLog(done) {
-  async.series([
-    function (done) {
-      mysqlPool.query('DELETE FROM ban_user', done);
-    },
-    function (done) {
-      mysqlPool.query('DELETE FROM ban_ip', done);
-    },
-    function (done) {
-      mysqlPool.query('SELECT * FROM login_log ORDER BY id', function (err, rows) {
-        if (err) return done(err);
-
-        async.mapSeries(rows, function (row, done) {
-          var succeeded = row.succeeded;
-          var userId = row.user_id;
-          var ip = row.ip;
-
-          async.parallel([
-            function (done) {
-              applyBanUser(succeeded, userId, done);
-            },
-            function (done) {
-              applyBanIp(succeeded, ip, done);
-            },
-          ], done);
-        }, function (err) {
-          console.log('loadLoginLog: rows: ' + rows.length);
-          done(err);
-        });
-      });
+function getLastLogin(userId, done) {
+  mysqlPool.query(
+    'SELECT * FROM last_login WHERE `user_id` = ?',
+    [userId],
+    function (err, rows) {
+      done(rows ? rows[0] : null);
     }
-  ], done);
+  );
 }
 
-app.loadLoginLog = loadLoginLog;
+function updateLastLogin(succeeded, userId, ip, done) {
+  if (!succeeded) return done();
+
+  mysqlPool.query(
+    'INSERT INTO last_login' +
+    ' (`user_id`, `created_at`, `ip`)' +
+    ' VALUES (?, ?, ?)' +
+    ' ON DUPLICATE KEY UPDATE `created_at` = VALUES(`created_at`), `ip` = VALUES(`ip`)',
+    [userId, new Date(), ip],
+    done
+  );
+}
+
+function loadLoginLog(done) {
+  mysqlPool.query('SELECT * FROM login_log ORDER BY id', function (err, rows) {
+    if (err) return done(err);
+
+    async.mapSeries(rows, function (row, done) {
+      var succeeded = row.succeeded;
+      var userId = row.user_id;
+      var ip = row.ip;
+
+      async.parallel([
+        function (done) {
+          applyBanUser(succeeded, userId, done);
+        },
+        function (done) {
+          applyBanIp(succeeded, ip, done);
+        },
+        function (done) {
+          updateLastLogin(succeeded, userId, ip, done);
+        },
+      ], done);
+    }, function (err) {
+      console.log('loadLoginLog: rows: ' + rows.length);
+      done(err);
+    });
+  });
+}
+
+app.tools = {
+  loadLoginLog: loadLoginLog,
+};
 
 app.initialize = function (done) {
   loadAllUser(done);
@@ -183,6 +201,8 @@ var helpers = {
     var login = req.body.login;
     var password = req.body.password;
 
+    req.ip = ip;
+
     async.waterfall([
       function(cb) {
         cb(null, userByLogin[login]);
@@ -222,16 +242,8 @@ var helpers = {
     ], function(err, user) {
       var succeeded = !err;
       var userId = (user || {})['id'];
+
       async.parallel([
-        function (done) {
-          mysqlPool.query(
-            'INSERT INTO login_log' +
-            ' (`created_at`, `user_id`, `login`, `ip`, `succeeded`)' +
-            ' VALUES (?,?,?,?,?)',
-            [new Date(), userId, login, ip, succeeded],
-            done
-          );
-        },
         function (done) {
           applyBanUser(succeeded, userId, done);
         },
@@ -399,8 +411,14 @@ app.post('/login', function(req, res) {
       return res.redirect('/');
     }
 
-    req.session.userId = user.id;
-    res.redirect('/mypage');
+    getLastLogin(user.id, function (lastLogin) {
+      req.session.lastLogin = lastLogin || user;
+      req.session.userId = user.id;
+
+      updateLastLogin(1, user.id, req.ip, function () {
+        res.redirect('/mypage');
+      });
+    });
   });
 });
 
@@ -410,19 +428,11 @@ app.get('/mypage', function(req, res) {
       req.session.notice = "You must be logged in"
       return res.redirect('/')
     }
-
-    mysqlPool.query(
-      'SELECT * FROM login_log WHERE succeeded = 1 AND user_id = ? ORDER BY id DESC LIMIT 2',
-      [user.id],
-      function(err, rows) {
-        var lastLogin = rows[rows.length-1];
-        res.render('mypage', { 'last_login': lastLogin });
-      }
-    );
+    res.render('mypage', { 'last_login': req.session.lastLogin });
   });
 });
 
-app.get('/report', function(req, res) {
+app.get('/report_orig', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPsOriginal(function(ips) {
@@ -439,7 +449,7 @@ app.get('/report', function(req, res) {
   });
 });
 
-app.get('/report2', function(req, res) {
+app.get('/report', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPs(function(ips) {

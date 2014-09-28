@@ -13,3 +13,4 @@ mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_users.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_log.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/ban_ip.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/ban_user.sql
+mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/last_login.sql
