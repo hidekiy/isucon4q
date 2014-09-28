@@ -210,7 +210,7 @@ var helpers = {
   },
 
   isIPBanned: function(ip, callback) {
-    if (globalConfig.ipBanThreshold <= banIp[ip].failures) {
+    if (banIp[ip] && (globalConfig.ipBanThreshold <= banIp[ip].failures)) {
       return callback(true);
     }
     mysqlPool.query(
