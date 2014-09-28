@@ -189,7 +189,7 @@ var helpers = {
       ' FROM ban_ip' +
       ' WHERE failures >= ?' +
       ' ORDER BY ip',
-      [globalConfig.userLockThreshold],
+      [globalConfig.ipBanThreshold],
       function(err, rows) {
         callback(_.map(rows, function(row) {
           return row['ip'];
