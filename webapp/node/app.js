@@ -412,8 +412,7 @@ app.post('/login', function(req, res) {
     }
 
     getLastLogin(user.id, function (lastLogin) {
-      console.log('login ', lastLogin || user);
-      req.session.lastLogin = lastLogin;
+      req.session.lastLogin = lastLogin || user;
       req.session.userId = user.id;
 
       updateLastLogin(1, user.id, req.ip, function () {
