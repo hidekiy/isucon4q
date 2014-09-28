@@ -411,7 +411,8 @@ app.post('/login', function(req, res) {
       return res.redirect('/');
     }
 
-    getLastLogin(function (lastLogin) {
+    getLastLogin(user.id, function (lastLogin) {
+      console.log('login ', lastLogin);
       req.session.lastLogin = lastLogin;
       req.session.userId = user.id;
 
