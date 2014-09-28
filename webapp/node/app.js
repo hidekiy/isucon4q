@@ -9,6 +9,7 @@ var mysql = require('mysql');
 var path = require('path');
 var session = require('express-session');
 var strftime = require('strftime');
+var MemcachedStore = require('connect-memcached')(session);
 
 var app = express();
 
@@ -294,7 +295,14 @@ app.enable('trust proxy');
 app.engine('ect', ect({ watch: true, root: __dirname + '/views', ext: '.ect' }).render);
 app.set('view engine', 'ect');
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(session({ 'secret': 'isucon4-node-qualifier', resave: true, saveUninitialized: true }));
+app.use(session({
+  'secret': 'isucon4-node-qualifier',
+  resave: true,
+  saveUninitialized: true,
+  store: new MemcachedStore({
+    hosts: ['127.0.0.1:11211']
+  })
+}));
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.locals.strftime = function(format, date) {
