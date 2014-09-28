@@ -387,6 +387,11 @@ app.use(function (err, req, res, next) {
   res.status(500).send('Error: ' + err.message);
 });
 
-var server = app.listen(process.env.PORT || 8080, function() {
-  console.log('Listening on port %d', server.address().port);
-});
+
+if (!module.parent) {
+  var server = app.listen(process.env.PORT || 8080, function() {
+    console.log('Listening on port %d', server.address().port);
+  });
+}
+
+module.exports = app;
