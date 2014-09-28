@@ -367,7 +367,9 @@ var helpers = {
   }
 };
 
-app.use(logger('dev'));
+if (debug) {
+  app.use(logger('dev'));
+}
 app.enable('trust proxy');
 app.engine('ect', ect({ cache: true, root: __dirname + '/views', ext: '.ect' }).render);
 app.set('view engine', 'ect');
