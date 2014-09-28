@@ -20,7 +20,7 @@ var globalConfig = {
   ipBanThreshold: process.env.ISU4_IP_BAN_THRESHOLD || 10
 };
 
-var debug = true;
+var debug = false;
 
 var mysqlPool = mysql.createPool({
   host: process.env.ISU4_DB_HOST || 'localhost',
@@ -32,7 +32,7 @@ var mysqlPool = mysql.createPool({
 
 var userById = {};
 var userByLogin = {};
-app.loadAllUser = function (done) {
+function loadAllUser(done) {
   mysqlPool.query('SELECT * FROM users', function (err, rows) {
     if (err) return done(err);
     rows.forEach(function (row) {
@@ -42,8 +42,95 @@ app.loadAllUser = function (done) {
     console.log('loadAllUser: users: ' + rows.length);
     done(null);
   });
-};
+}
 
+function applyBanUser(succeeded, userId, done) {
+  if (!userId) return done();
+
+  if (succeeded) {
+    if (debug) console.log('reset ban_user failure count');
+    mysqlPool.query(
+      'INSERT INTO ban_user' +
+      ' (`user_id`, `failures`)' +
+      ' VALUES (?, 0)' +
+      ' ON DUPLICATE KEY UPDATE `failures` = 0',
+      [userId],
+      done
+    );
+  } else {
+    if (debug) console.log('increment ban_user failure count');
+    mysqlPool.query(
+      'INSERT INTO ban_user' +
+      ' (`user_id`, `failures`)' +
+      ' VALUES (?, 1)' +
+      ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
+      [userId],
+      done
+    );
+  }
+}
+
+function applyBanIp(succeeded, ip, done) {
+  if (succeeded) {
+    if (debug) console.log('reset ban_ip failure count');
+    mysqlPool.query(
+      'INSERT INTO ban_ip' +
+      ' (`ip`, `failures`)' +
+      ' VALUES (?, 0)' +
+      ' ON DUPLICATE KEY UPDATE `failures` = 0',
+      [ip],
+      done
+    );
+  } else {
+    if (debug) console.log('increment ban_ip failure count');
+    mysqlPool.query(
+      'INSERT INTO ban_ip' +
+      ' (`ip`, `failures`)' +
+      ' VALUES (?, 1)' +
+      ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
+      [ip],
+      done
+    );
+  }
+}
+
+function loadLoginLog(done) {
+  async.series([
+    function (done) {
+      mysqlPool.query('DELETE FROM ban_user', done);
+    },
+    function (done) {
+      mysqlPool.query('DELETE FROM ban_ip', done);
+    },
+    function (done) {
+      mysqlPool.query('SELECT * FROM login_log ORDER BY id', function (err, rows) {
+        if (err) return done(err);
+
+        async.mapSeries(rows, function (row, done) {
+          var succeeded = row.succeeded;
+          var userId = row.user_id;
+          var ip = row.ip;
+
+          async.parallel([
+            function (done) {
+              applyBanUser(succeeded, userId, done);
+            },
+            function (done) {
+              applyBanIp(succeeded, ip, done);
+            },
+          ], done);
+        }, function (err) {
+          console.log('loadLoginLog: rows: ' + rows.length);
+          done(err);
+        });
+      });
+    }
+  ], done);
+}
+
+app.initialize = function (done) {
+  async.series([loadAllUser, loadLoginLog], done);
+};
 
 var helpers = {
   calculatePasswordHash: function(password, salt) {
@@ -138,50 +225,10 @@ var helpers = {
           );
         },
         function (done) {
-          if (succeeded) {
-            if (debug) console.log('reset ban_user failure count');
-            mysqlPool.query(
-              'INSERT INTO ban_user' +
-              ' (`user_id`, `failures`)' +
-              ' VALUES (?, 0)' +
-              ' ON DUPLICATE KEY UPDATE `failures` = 0',
-              [userId],
-              done
-            );
-          } else {
-            if (debug) console.log('increment ban_user failure count');
-            mysqlPool.query(
-              'INSERT INTO ban_user' +
-              ' (`user_id`, `failures`)' +
-              ' VALUES (?, 1)' +
-              ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
-              [userId],
-              done
-            );
-          }
+          applyBanUser(succeeded, userId, done);
         },
         function (done) {
-          if (succeeded) {
-            if (debug) console.log('reset ban_ip failure count');
-            mysqlPool.query(
-              'INSERT INTO ban_ip' +
-              ' (`ip`, `failures`)' +
-              ' VALUES (?, 0)' +
-              ' ON DUPLICATE KEY UPDATE `failures` = 0',
-              [ip],
-              done
-            );
-          } else {
-            if (debug) console.log('increment ban_ip failure count');
-            mysqlPool.query(
-              'INSERT INTO ban_ip' +
-              ' (`ip`, `failures`)' +
-              ' VALUES (?, 1)' +
-              ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
-              [ip],
-              done
-            );
-          }
+          applyBanIp(succeeded, ip, done);
         },
       ], function (e, results) {
         if (e) console.log('attemptLogin: ' + e);
@@ -407,7 +454,7 @@ app.use(function (err, req, res, next) {
 
 
 if (!module.parent) {
-  app.loadAllUser(function (err) {
+  app.initialize(function (err) {
     if (err) throw err;
 
     var server = app.listen(process.env.PORT || 8080, function() {
