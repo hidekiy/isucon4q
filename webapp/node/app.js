@@ -78,7 +78,7 @@ var helpers = {
     async.waterfall([
       function(cb) {
         mysqlPool.query('SELECT * FROM users WHERE login = ?', [login], function(err, rows) {
-          cb(null, rows && rows[0]);
+          cb(null, rows[0]);
         });
       },
       function(user, cb) {
