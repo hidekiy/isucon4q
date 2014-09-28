@@ -20,7 +20,7 @@ if (cluster.isMaster) {
   });
 
 } else {
-  app.loadAllUser(function (err) {
+  app.initialize(function (err) {
     if (err) throw err;
     
     var server = app.listen(process.env.PORT || 8080, function() {
