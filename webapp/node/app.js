@@ -198,6 +198,42 @@ var helpers = {
     );
   },
 
+  getBannedIPsOriginal: function(callback) {
+    mysqlPool.query(
+      'SELECT ip FROM (SELECT ip, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM '+
+      'login_log GROUP BY ip) AS t0 WHERE t0.max_succeeded = 0 AND t0.cnt >= ?',
+      [globalConfig.ipBanThreshold],
+      function(err, rows) {
+        var bannedIps = _.map(rows, function(row) { return row.ip; });
+
+        mysqlPool.query(
+          'SELECT ip, MAX(id) AS last_login_id FROM login_log WHERE succeeded = 1 GROUP by ip',
+          function(err, rows) {
+            async.parallel(
+              _.map(rows, function(row) {
+                return function(cb) {
+                  mysqlPool.query(
+                    'SELECT COUNT(1) AS cnt FROM login_log WHERE ip = ? AND ? < id',
+                    [row.ip, row.last_login_id],
+                    function(err, rows) {
+                      if(globalConfig.ipBanThreshold <= (rows[0] || {})['cnt']) {
+                        bannedIps.push(row['ip']);
+                      }
+                      cb(null);
+                    }
+                  );
+                };
+              }),
+              function(err) {
+                callback(bannedIps);
+              }
+            );
+          }
+        );
+      }
+    )
+  },
+
   getLockedUsers: function(callback) {
     mysqlPool.query(
       'SELECT ban_user.user_id, users.login' +
@@ -275,6 +311,23 @@ app.get('/mypage', function(req, res) {
 });
 
 app.get('/report', function(req, res) {
+  async.parallel({
+    banned_ips: function(cb) {
+      helpers.getBannedIPsOriginal(function(ips) {
+        cb(null, ips);
+      });
+    },
+    locked_users: function(cb) {
+      helpers.getLockedUsers(function(users) {
+        cb(null, users);
+      });
+    }
+  }, function(err, result) {
+    res.json(result);
+  });
+});
+
+app.get('/report2', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPs(function(ips) {
