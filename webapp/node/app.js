@@ -9,6 +9,8 @@ var mysql = require('mysql');
 var path = require('path');
 var session = require('express-session');
 var strftime = require('strftime');
+
+var cluster = require('cluster');
 var MemcachedStore = require('connect-memcached')(session);
 
 var app = express();
@@ -26,6 +28,22 @@ var mysqlPool = mysql.createPool({
   password: process.env.ISU4_DB_PASSWORD || '',
   database: process.env.ISU4_DB_NAME || 'isu4_qualifier'
 });
+
+
+var userById = {};
+var userByLogin = {};
+app.loadAllUser = function (done) {
+  mysqlPool.query('SELECT * FROM users', function (err, rows) {
+    if (err) return done(err);
+    rows.forEach(function (row) {
+      userById[row.id] = row;
+      userByLogin[row.login] = row;
+    });
+    console.log('loadAllUser: users: ' + rows.length);
+    done(null);
+  });
+};
+
 
 var helpers = {
   calculatePasswordHash: function(password, salt) {
@@ -77,9 +95,7 @@ var helpers = {
 
     async.waterfall([
       function(cb) {
-        mysqlPool.query('SELECT * FROM users WHERE login = ?', [login], function(err, rows) {
-          cb(null, rows[0]);
-        });
+        cb(null, userByLogin[login]);
       },
       function(user, cb) {
         helpers.isIPBanned(ip, function(banned) {
@@ -175,13 +191,7 @@ var helpers = {
   },
 
   getCurrentUser: function(user_id, callback) {
-    mysqlPool.query('SELECT * FROM users WHERE id = ?', [user_id], function(err, rows) {
-      if(err) {
-        return callback(null);
-      }
-
-      callback(rows[0]);
-    });
+    callback(userById[user_id]);
   },
 
   getBannedIPs: function(callback) {
@@ -397,8 +407,12 @@ app.use(function (err, req, res, next) {
 
 
 if (!module.parent) {
-  var server = app.listen(process.env.PORT || 8080, function() {
-    console.log('Listening on port %d', server.address().port);
+  app.loadAllUser(function (err) {
+    if (err) throw err;
+
+    var server = app.listen(process.env.PORT || 8080, function() {
+      console.log('app.js: Listening on port %d', server.address().port);
+    });
   });
 }
 

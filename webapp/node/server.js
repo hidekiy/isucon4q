@@ -1,5 +1,6 @@
 var cluster = require('cluster');
 var numCPUs = require('os').cpus().length;
+var app = require('./app');
 
 if (cluster.isMaster) {
   // Fork workers.
@@ -19,8 +20,11 @@ if (cluster.isMaster) {
   });
 
 } else {
-  var app = require('./app');
-  var server = app.listen(process.env.PORT || 8080, function() {
-    console.log('Listening on port %d', server.address().port);
+  app.loadAllUser(function (err) {
+    if (err) throw err;
+    
+    var server = app.listen(process.env.PORT || 8080, function() {
+      console.log('server.js: Listening on port %d', server.address().port);
+    });
   });
 }
