@@ -188,22 +188,27 @@ var helpers = {
         cb(null, userByLogin[login]);
       },
       function(user, cb) {
-        helpers.isIPBanned(ip, function(banned) {
-          if(banned) {
-            cb('banned', user);
-          } else {
-            cb(null, user);
-          };
-        });
-      },
-      function(user, cb) {
-        helpers.isUserLocked(user, function(locked) {
-          if(locked) {
-            cb('locked', user);
-          } else {
-            cb(null, user);
-          };
-        });
+        var error = null;
+        async.parallel([
+          function(done) {
+            helpers.isIPBanned(ip, function(banned) {
+              if(banned) {
+                error = 'banned';
+              }
+              done(null);
+            });
+          },
+          function (done) {
+            helpers.isUserLocked(user, function(locked) {
+              if(locked) {
+                error = error || 'locked';
+              }
+              done(null);
+            });
+          }
+        ], function() {
+          cb(error, user);
+        }
       },
       function(user, cb) {
         if(user && helpers.calculatePasswordHash(password, user.salt) == user.password_hash) {
