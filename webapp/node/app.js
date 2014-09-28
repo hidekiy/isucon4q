@@ -413,7 +413,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: new MemcachedStore({
-    hosts: ['127.0.0.1:11211']
+    hosts: ['127.0.0.1:11211'],
+    poolSize: 20,
   })
 }));
 app.use(express.static(path.join(__dirname, '../public')));
