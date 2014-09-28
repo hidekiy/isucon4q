@@ -12,4 +12,4 @@ mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/schema.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_users.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_log.sql
 
-(cd /home/isucon/webapp/node; /home/isucon/env.sh init.js)
+(cd /home/isucon/webapp/node; /home/isucon/env.sh node init.js)
