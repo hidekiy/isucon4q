@@ -78,25 +78,31 @@ var helpers = {
     async.waterfall([
       function(cb) {
         mysqlPool.query('SELECT * FROM users WHERE login = ?', [login], function(err, rows) {
-          cb(null, rows[0]);
+          cb(null, rows && rows[0]);
         });
       },
       function(user, cb) {
-        helpers.isIPBanned(ip, function(banned) {
-          if(banned) {
-            cb('banned', user);
-          } else {
-            cb(null, user);
-          };
-        });
-      },
-      function(user, cb) {
-        helpers.isUserLocked(user, function(locked) {
-          if(locked) {
-            cb('locked', user);
-          } else {
-            cb(null, user);
-          };
+        async.parallel([
+          function(done) {
+            helpers.isIPBanned(ip, function(banned) {
+              if(banned) {
+                done('banned');
+              } else {
+                done(null);
+              };
+            });
+          },
+          function (done) {
+            helpers.isUserLocked(user, function(locked) {
+              if(locked) {
+                done('locked');
+              } else {
+                done(null);
+              };
+            });
+          }
+        ], function(err) {
+          cb(err, user);
         });
       },
       function(user, cb) {
