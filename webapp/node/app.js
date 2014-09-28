@@ -51,9 +51,8 @@ function loadAllBanIp(done) {
     if (err) return done(err);
     rows.forEach(function (row) {
       banIp[row.ip] = row;
-      delete row.ip;
     });
-    if (debug) console.log('loadAllBanIp: ips: ' + rows.length);
+    console.log('loadAllBanIp: ips: ' + rows.length);
     done(null);
   });
 }
@@ -64,9 +63,8 @@ function loadAllBanUser(done) {
     if (err) return done(err);
     rows.forEach(function (row) {
       banUser[row.user_id] = row;
-      delete row.user_id;
     });
-    if (debug) console.log('loadAllBanUser: ips: ' + rows.length);
+    console.log('loadAllBanUser: ips: ' + rows.length);
     done(null);
   });
 }
@@ -178,7 +176,8 @@ app.tools = {
 app.initialize = function (done) {
   async.parallel([
     loadAllUser,
-    loadAllBanIp
+    loadAllBanIp,
+    loadAllBanUser
   ], done);
 };
 
