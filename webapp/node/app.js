@@ -23,7 +23,7 @@ var globalConfig = {
 var debug = false;
 
 var mysqlPool = mysql.createPool({
-  connectionLimit: 20,
+  connectionLimit: 10,
   host: process.env.ISU4_DB_HOST || 'localhost',
   user: process.env.ISU4_DB_USER || 'root',
   password: process.env.ISU4_DB_PASSWORD || '',
@@ -414,7 +414,7 @@ app.use(session({
   saveUninitialized: false,
   store: new MemcachedStore({
     hosts: ['127.0.0.1:11211'],
-    poolSize: 20,
+    poolSize: 10,
   })
 }));
 app.use(express.static(path.join(__dirname, '../public')));
