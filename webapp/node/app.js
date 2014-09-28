@@ -208,7 +208,7 @@ var helpers = {
           }
         ], function() {
           cb(error, user);
-        }
+        });
       },
       function(user, cb) {
         if(user && helpers.calculatePasswordHash(password, user.salt) == user.password_hash) {
