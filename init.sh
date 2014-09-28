@@ -17,3 +17,4 @@ mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/last_login.sql
 
 sudo /etc/init.d/memcached restart
 sudo /etc/init.d/supervisord restart
+sleep 10
