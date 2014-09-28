@@ -432,7 +432,7 @@ app.get('/mypage', function(req, res) {
   });
 });
 
-app.get('/report', function(req, res) {
+app.get('/report_orig', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPsOriginal(function(ips) {
@@ -449,7 +449,7 @@ app.get('/report', function(req, res) {
   });
 });
 
-app.get('/report2', function(req, res) {
+app.get('/report', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPs(function(ips) {
