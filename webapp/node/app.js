@@ -376,8 +376,8 @@ app.set('view engine', 'ect');
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(session({
   'secret': 'isucon4-node-qualifier',
-  resave: true,
-  saveUninitialized: true,
+  resave: false,
+  saveUninitialized: false,
   store: new MemcachedStore({
     hosts: ['127.0.0.1:11211']
   })
