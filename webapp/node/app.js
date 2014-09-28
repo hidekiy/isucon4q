@@ -247,6 +247,45 @@ var helpers = {
         }));
       }
     );
+  },
+
+  getLockedUsersOriginal: function(callback) {
+    mysqlPool.query(
+      'SELECT user_id, login FROM ' +
+      '(SELECT user_id, login, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM ' +
+      'login_log GROUP BY user_id) AS t0 WHERE t0.user_id IS NOT NULL AND ' +
+      't0.max_succeeded = 0 AND t0.cnt >= ?',
+      [globalConfig.userLockThreshold],
+      function(err, rows) {
+        var lockedUsers = _.map(rows, function(row) { return row['login']; });
+
+        mysqlPool.query(
+          'SELECT user_id, login, MAX(id) AS last_login_id FROM login_log WHERE ' +
+          'user_id IS NOT NULL AND succeeded = 1 GROUP BY user_id',
+          function(err, rows) {
+            async.parallel(
+              _.map(rows, function(row) {
+                return function(cb) {
+                  mysqlPool.query(
+                    'SELECT COUNT(1) AS cnt FROM login_log WHERE user_id = ? AND ? < id',
+                    [row['user_id'], row['last_login_id']],
+                    function(err, rows) {
+                      if(globalConfig.userLockThreshold <= (rows[0] || {})['cnt']) {
+                        lockedUsers.push(row['login']);
+                      };
+                      cb(null);
+                    }
+                  );
+                };
+              }),
+              function(err) {
+                callback(lockedUsers);
+              }
+            );
+          }
+        );
+      }
+    )
   }
 };
 
@@ -318,7 +357,7 @@ app.get('/report', function(req, res) {
       });
     },
     locked_users: function(cb) {
-      helpers.getLockedUsers(function(users) {
+      helpers.getLockedUsersOriginal(function(users) {
         cb(null, users);
       });
     }
