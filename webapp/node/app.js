@@ -17,6 +17,8 @@ var globalConfig = {
   ipBanThreshold: process.env.ISU4_IP_BAN_THRESHOLD || 10
 };
 
+var debug = true;
+
 var mysqlPool = mysql.createPool({
   host: process.env.ISU4_DB_HOST || 'localhost',
   user: process.env.ISU4_DB_USER || 'root',
@@ -37,32 +39,32 @@ var helpers = {
     };
 
     mysqlPool.query(
-      'SELECT COUNT(1) AS failures FROM login_log WHERE ' +
-      'user_id = ? AND id > IFNULL((select id from login_log where ' +
-      'user_id = ? AND succeeded = 1 ORDER BY id DESC LIMIT 1), 0);',
-      [user.id, user.id],
+      'SELECT * FROM ban_user WHERE ' +
+      'user_id = ?',
+      [user.id],
       function(err, rows) {
         if(err) {
           return callback(false);
         }
 
-        callback(globalConfig.userLockThreshold <= rows[0].failures);
+        var failures = rows[0] ? rows[0].failures : 0;
+        callback(globalConfig.userLockThreshold <= failures);
       }
-    )
+    );
   },
 
   isIPBanned: function(ip, callback) {
     mysqlPool.query(
-      'SELECT COUNT(1) AS failures FROM login_log WHERE ' +
-      'ip = ? AND id > IFNULL((select id from login_log where ip = ? AND ' +
-      'succeeded = 1 ORDER BY id DESC LIMIT 1), 0);',
-      [ip, ip],
+      'SELECT * FROM ban_ip WHERE ' +
+      'ip = ?',
+      [ip],
       function(err, rows) {
         if(err) {
           return callback(false);
         }
 
-        callback(globalConfig.ipBanThreshold <= rows[0].failures);
+        var failures = rows[0] ? rows[0].failures : 0;
+        callback(globalConfig.ipBanThreshold <= failures);
       }
     )
   },
@@ -107,15 +109,67 @@ var helpers = {
       }
     ], function(err, user) {
       var succeeded = !err;
-      mysqlPool.query(
-        'INSERT INTO login_log' +
-        ' (`created_at`, `user_id`, `login`, `ip`, `succeeded`)' +
-        ' VALUES (?,?,?,?,?)',
-        [new Date(), (user || {})['id'], login, ip, succeeded],
-        function(e, rows) {
-          callback(err, user);
-        }
-      );
+      var userId = (user || {})['id'];
+      async.parallel([
+        function (done) {
+          mysqlPool.query(
+            'INSERT INTO login_log' +
+            ' (`created_at`, `user_id`, `login`, `ip`, `succeeded`)' +
+            ' VALUES (?,?,?,?,?)',
+            [new Date(), userId, login, ip, succeeded],
+            done
+          );
+        },
+        function (done) {
+          if (succeeded) {
+            if (debug) console.log('reset ban_user failure count');
+            mysqlPool.query(
+              'INSERT INTO ban_user' +
+              ' (`user_id`, `failures`)' +
+              ' VALUES (?, 0)' +
+              ' ON DUPLICATE KEY UPDATE `failures` = 0',
+              [userId],
+              done
+            );
+          } else {
+            if (debug) console.log('increment ban_user failure count');
+            mysqlPool.query(
+              'INSERT INTO ban_user' +
+              ' (`user_id`, `failures`)' +
+              ' VALUES (?, 1)' +
+              ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
+              [userId],
+              done
+            );
+          }
+        },
+        function (done) {
+          if (succeeded) {
+            if (debug) console.log('reset ban_ip failure count');
+            mysqlPool.query(
+              'INSERT INTO ban_ip' +
+              ' (`ip`, `failures`)' +
+              ' VALUES (?, 0)' +
+              ' ON DUPLICATE KEY UPDATE `failures` = 0',
+              [ip],
+              done
+            );
+          } else {
+            if (debug) console.log('increment ban_ip failure count');
+            mysqlPool.query(
+              'INSERT INTO ban_ip' +
+              ' (`ip`, `failures`)' +
+              ' VALUES (?, 1)' +
+              ' ON DUPLICATE KEY UPDATE `failures` = `failures` + 1',
+              [ip],
+              done
+            );
+          }
+        },
+      ], function (e, results) {
+        if (e) console.log('attemptLogin: ' + e);
+        callback(err, user);
+      })
     });
   },
 
@@ -130,6 +184,21 @@ var helpers = {
   },
 
   getBannedIPs: function(callback) {
+    mysqlPool.query(
+      'SELECT ip' +
+      ' FROM ban_ip' +
+      ' WHERE failures >= ?' +
+      ' ORDER BY ip',
+      [globalConfig.ipBanThreshold],
+      function(err, rows) {
+        callback(_.map(rows, function(row) {
+          return row['ip'];
+        }));
+      }
+    );
+  },
+
+  getBannedIPsOriginal: function(callback) {
     mysqlPool.query(
       'SELECT ip FROM (SELECT ip, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM '+
       'login_log GROUP BY ip) AS t0 WHERE t0.max_succeeded = 0 AND t0.cnt >= ?',
@@ -166,6 +235,21 @@ var helpers = {
   },
 
   getLockedUsers: function(callback) {
+    mysqlPool.query(
+      'SELECT ban_user.user_id, users.login' +
+      ' FROM ban_user, users' +
+      ' WHERE failures >= ? AND ban_user.user_id = users.id' +
+      ' ORDER BY ban_user.user_id',
+      [globalConfig.userLockThreshold],
+      function(err, rows) {
+        callback(_.map(rows, function(row) {
+          return row['login'];
+        }));
+      }
+    );
+  },
+
+  getLockedUsersOriginal: function(callback) {
     mysqlPool.query(
       'SELECT user_id, login FROM ' +
       '(SELECT user_id, login, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM ' +
@@ -266,6 +350,23 @@ app.get('/mypage', function(req, res) {
 });
 
 app.get('/report', function(req, res) {
+  async.parallel({
+    banned_ips: function(cb) {
+      helpers.getBannedIPsOriginal(function(ips) {
+        cb(null, ips);
+      });
+    },
+    locked_users: function(cb) {
+      helpers.getLockedUsersOriginal(function(users) {
+        cb(null, users);
+      });
+    }
+  }, function(err, result) {
+    res.json(result);
+  });
+});
+
+app.get('/report2', function(req, res) {
   async.parallel({
     banned_ips: function(cb) {
       helpers.getBannedIPs(function(ips) {
