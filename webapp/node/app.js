@@ -45,6 +45,32 @@ function loadAllUser(done) {
   });
 }
 
+var banIp = {};
+function loadAllBanIp(done) {
+  mysqlPool.query('SELECT * FROM ban_ip', function (err, rows) {
+    if (err) return done(err);
+    rows.forEach(function (row) {
+      banIp[row.ip] = row;
+      delete row.ip;
+    });
+    if (debug) console.log('loadAllBanIp: ips: ' + rows.length);
+    done(null);
+  });
+}
+
+var banUser = {};
+function loadAllBanUser(done) {
+  mysqlPool.query('SELECT * FROM ban_user', function (err, rows) {
+    if (err) return done(err);
+    rows.forEach(function (row) {
+      banUser[row.user_id] = row;
+      delete row.user_id;
+    });
+    if (debug) console.log('loadAllBanUser: ips: ' + rows.length);
+    done(null);
+  });
+}
+
 function applyBanUser(succeeded, userId, done) {
   if (!userId) return done();
 
@@ -150,7 +176,10 @@ app.tools = {
 };
 
 app.initialize = function (done) {
-  loadAllUser(done);
+  async.parallel([
+    loadAllUser,
+    loadAllBanIp
+  ], done);
 };
 
 
@@ -182,6 +211,9 @@ var helpers = {
   },
 
   isIPBanned: function(ip, callback) {
+    if (banIp[ip] && (globalConfig.ipBanThreshold <= banIp[ip].failures)) {
+      return callback(true);
+    }
     mysqlPool.query(
       'SELECT * FROM ban_ip WHERE ' +
       'ip = ?',
