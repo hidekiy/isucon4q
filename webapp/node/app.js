@@ -128,9 +128,12 @@ function loadLoginLog(done) {
   ], done);
 }
 
+app.loadLoginLog = loadLoginLog;
+
 app.initialize = function (done) {
-  async.series([loadAllUser, loadLoginLog], done);
+  loadAllUser(done);
 };
+
 
 var helpers = {
   calculatePasswordHash: function(password, salt) {
