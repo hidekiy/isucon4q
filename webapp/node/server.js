@@ -1,5 +1,4 @@
 var cluster = require('cluster');
-var http = require('http');
 var numCPUs = require('os').cpus().length;
 
 if (cluster.isMaster) {
@@ -18,12 +17,7 @@ if (cluster.isMaster) {
   cluster.on('listening', function(worker, address) {
     console.log("worker("+worker.id+").listening " + address.address + ":" + address.port);
   });
-  
+
 } else {
-  // Workers can share any TCP connection
-  // In this case its a HTTP server
-  http.createServer(function(req, res) {
-    res.writeHead(200);
-    res.end("hello world\n");
-  }).listen(8000);
+var app = require('./app');
 }
