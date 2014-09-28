@@ -23,6 +23,7 @@ var globalConfig = {
 var debug = false;
 
 var mysqlPool = mysql.createPool({
+  connectionLimit: 20,
   host: process.env.ISU4_DB_HOST || 'localhost',
   user: process.env.ISU4_DB_USER || 'root',
   password: process.env.ISU4_DB_PASSWORD || '',
